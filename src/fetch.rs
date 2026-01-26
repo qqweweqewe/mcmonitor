@@ -1,25 +1,38 @@
 use rust_mc_status::{McClient, ServerEdition};
-use crate::error::{AgregationError, FetchError};
+use crate::error::FetchError;
 
-struct ServerActivityData {
-    online: bool,
-    players: Vec<String>,
-    ping: f64
+pub struct ServerActivityData {
+    pub players: Option<Vec<String>>,
+    pub ping: f64,
 }
 
-async fn get_raw() -> Result<ServerActivityData, FetchError> {
+pub async fn get_server_status(server_address: &str) -> Result<ServerActivityData, FetchError> {
     let client = McClient::new()
         .with_timeout(std::time::Duration::from_secs(2))
         .with_max_parallel(1);
 
-    // Ping a Java server (automatically uses SRV lookup if port not specified)
-    let status = client.ping("qwew.space", ServerEdition::Java).await?;
-    println!("Server is online: {}", status.online);
-    if let Some((online, max)) = status.players() {
-        println!("Players: {}/{}", online, max);
-    };
-    println!("ping {}", status.latency);
 
-    Ok(())
+    let status = client.ping(server_address, ServerEdition::Java).await?;
+
+    if !status.online {
+        return Err("server offline".into())
+    }
+
+    let mut players: Option<Vec<String>> = Option::None;
+
+    if let rust_mc_status::ServerData::Java(java) = status.data {
+        let java_players = java.players;
+        players = match java_players.sample {
+            Some(player_vec) => {
+                Some(player_vec.into_iter().map(|p| p.name).collect())
+            },
+            None => None
+        };
+    }    
+
+    Ok(ServerActivityData {
+        players,
+        ping: status.latency,
+    })
 }
 
