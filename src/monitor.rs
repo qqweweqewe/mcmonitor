@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::Duration;
 use tokio::time;
-use crate::{config::Config, fetch, telegram};
+use crate::{config::Config, fetch, telegram, messages};
 
 pub struct Monitor {
     config: Config,
@@ -50,7 +50,7 @@ impl Monitor {
             .collect();
 
         for player in &new_players {
-            let message = format!("🎮 {} joined the server!", player);
+            let message = messages::get_random_join_message(player);
             telegram::send_message(
                 &self.config.telegram_bot_token,
                 &self.config.telegram_chat_id,

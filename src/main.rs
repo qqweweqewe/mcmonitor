@@ -3,6 +3,7 @@ mod error;
 mod config;
 mod telegram;
 mod monitor;
+mod messages;
 
 use config::Config;
 use monitor::Monitor;
