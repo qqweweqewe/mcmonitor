@@ -3,7 +3,6 @@ use crate::error::FetchError;
 
 pub struct ServerActivityData {
     pub players: Option<Vec<String>>,
-    pub ping: f64,
 }
 
 pub async fn get_server_status(server_address: &str) -> Result<ServerActivityData, FetchError> {
@@ -32,7 +31,6 @@ pub async fn get_server_status(server_address: &str) -> Result<ServerActivityDat
 
     Ok(ServerActivityData {
         players,
-        ping: status.latency,
     })
 }
 
