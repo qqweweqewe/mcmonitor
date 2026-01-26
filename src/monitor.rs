@@ -29,6 +29,13 @@ impl Monitor {
     }
 
     async fn check_server(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Check for bot commands
+        telegram::check_commands(
+            &self.config.telegram_bot_token,
+            &self.config.telegram_chat_id,
+            &self.config.server_address,
+        ).await?;
+        
         let status = fetch::get_server_status(&self.config.server_address).await?;
 
         let current_players: HashSet<String> = match status.players {

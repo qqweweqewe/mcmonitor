@@ -23,3 +23,54 @@ pub async fn send_message(
 
     Ok(())
 }
+
+pub async fn handle_all_command(
+    bot_token: &str,
+    chat_id: &str,
+    server_address: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match crate::fetch::get_server_status(server_address).await {
+        Ok(status) => {
+            let message = match status.players {
+                Some(players) if !players.is_empty() => {
+                    format!("🎮 Players online ({}):\n{}", players.len(), players.join("\n"))
+                },
+                Some(_) => "🎮 Server is online but no players are currently playing.".to_string(),
+                None => "🎮 Server is online but player list is not available.".to_string(),
+            };
+            
+            send_message(bot_token, chat_id, &message).await?;
+        },
+        Err(_) => {
+            send_message(bot_token, chat_id, "❌ Server is offline or unreachable.").await?;
+        }
+    }
+    
+    Ok(())
+}
+
+pub async fn check_commands(
+    bot_token: &str,
+    chat_id: &str,
+    server_address: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let url = format!("https://api.telegram.org/bot{}/getUpdates", bot_token);
+    
+    let client = reqwest::Client::new();
+    let response = client.get(&url).send().await?;
+    let updates: serde_json::Value = response.json().await?;
+    
+    if let Some(result) = updates["result"].as_array() {
+        for update in result {
+            if let Some(message) = update["message"].as_object() {
+                if let Some(text) = message["text"].as_str() {
+                    if text == "/all" {
+                        handle_all_command(bot_token, chat_id, server_address).await?;
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
