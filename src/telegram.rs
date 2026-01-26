@@ -33,16 +33,16 @@ pub async fn handle_all_command(
         Ok(status) => {
             let message = match status.players {
                 Some(players) if !players.is_empty() => {
-                    format!("🎮 Players online ({}):\n{}", players.len(), players.join("\n"))
+                    format!("Players online ({}):\n> {}", players.len(), players.join("\n> "))
                 },
-                Some(_) => "🎮 Server is online but no players are currently playing.".to_string(),
-                None => "🎮 Server is online but player list is not available.".to_string(),
+                Some(_) => "> No players online".to_string(),
+                None => "> Pretty empty here".to_string(),
             };
             
             send_message(bot_token, chat_id, &message).await?;
         },
         Err(_) => {
-            send_message(bot_token, chat_id, "❌ Server is offline or unreachable.").await?;
+            send_message(bot_token, chat_id, "> Server is offline or unreachable").await?;
         }
     }
     
