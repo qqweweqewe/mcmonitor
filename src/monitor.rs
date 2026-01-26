@@ -48,9 +48,24 @@ impl Monitor {
             .difference(&self.previous_players)
             .cloned()
             .collect();
+            
+        let left_players: Vec<_> = self.previous_players
+            .difference(&current_players)
+            .cloned()
+            .collect();
 
         for player in &new_players {
             let message = messages::get_random_join_message(player);
+            telegram::send_message(
+                &self.config.telegram_bot_token,
+                &self.config.telegram_chat_id,
+                &message,
+            )
+            .await?;
+        }
+        
+        for player in &left_players {
+            let message = messages::get_random_leave_message(player);
             telegram::send_message(
                 &self.config.telegram_bot_token,
                 &self.config.telegram_chat_id,
