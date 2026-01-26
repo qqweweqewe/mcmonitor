@@ -53,8 +53,13 @@ pub async fn check_commands(
     bot_token: &str,
     chat_id: &str,
     server_address: &str,
+    last_update_id: &mut i64,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let url = format!("https://api.telegram.org/bot{}/getUpdates", bot_token);
+    let url = format!(
+        "https://api.telegram.org/bot{}/getUpdates?offset={}", 
+        bot_token, 
+        *last_update_id + 1
+    );
     
     let client = reqwest::Client::new();
     let response = client.get(&url).send().await?;
@@ -62,10 +67,14 @@ pub async fn check_commands(
     
     if let Some(result) = updates["result"].as_array() {
         for update in result {
-            if let Some(message) = update["message"].as_object() {
-                if let Some(text) = message["text"].as_str() {
-                    if text == "/all" {
-                        handle_all_command(bot_token, chat_id, server_address).await?;
+            if let Some(update_id) = update["update_id"].as_i64() {
+                *last_update_id = update_id;
+                
+                if let Some(message) = update["message"].as_object() {
+                    if let Some(text) = message["text"].as_str() {
+                        if text == "/all" {
+                            handle_all_command(bot_token, chat_id, server_address).await?;
+                        }
                     }
                 }
             }

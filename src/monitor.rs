@@ -6,6 +6,7 @@ use crate::{config::Config, fetch, telegram, messages};
 pub struct Monitor {
     config: Config,
     previous_players: HashSet<String>,
+    last_update_id: i64,
 }
 
 impl Monitor {
@@ -13,6 +14,7 @@ impl Monitor {
         Self {
             config,
             previous_players: HashSet::new(),
+            last_update_id: 0,
         }
     }
 
@@ -34,6 +36,7 @@ impl Monitor {
             &self.config.telegram_bot_token,
             &self.config.telegram_chat_id,
             &self.config.server_address,
+            &mut self.last_update_id,
         ).await?;
         
         let status = fetch::get_server_status(&self.config.server_address).await?;
