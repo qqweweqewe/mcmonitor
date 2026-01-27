@@ -13,6 +13,7 @@ pub async fn send_message(
         .json(&serde_json::json!({
             "chat_id": chat_id,
             "text": message,
+            "parse_mode": "MarkdownV2"
         }))
         .send()
         .await?;
@@ -65,13 +66,13 @@ pub async fn check_commands(
     let response = client.get(&url).send().await?;
     let updates: serde_json::Value = response.json().await?;
     
-    if let Some(result) = updates["result"].as_array() {
+    if let Some(result) = updates.get("result").and_then(|r| r.as_array()) {
         for update in result {
-            if let Some(update_id) = update["update_id"].as_i64() {
+            if let Some(update_id) = update.get("update_id").and_then(|id| id.as_i64()) {
                 *last_update_id = update_id;
                 
-                if let Some(message) = update["message"].as_object() {
-                    if let Some(text) = message["text"].as_str() {
+                if let Some(message) = update.get("message") {
+                    if let Some(text) = message.get("text").and_then(|t| t.as_str()) {
                         if text == "/all" {
                             handle_all_command(bot_token, chat_id, server_address).await?;
                         }

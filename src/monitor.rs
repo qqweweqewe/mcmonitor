@@ -41,18 +41,10 @@ impl Monitor {
         
         let status = fetch::get_server_status(&self.config.server_address).await?;
 
-        let current_players: HashSet<String> = match status.players {
-            Some(players) => players.into_iter().collect(),
-
-            None => {
-
-                self.previous_players.clear();
-
-                return Ok(());
-
-            }
-
-        };
+        let current_players: HashSet<String> = status.players
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
         
         let new_players: Vec<_> = current_players
             .difference(&self.previous_players)
