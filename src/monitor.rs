@@ -7,6 +7,7 @@ pub struct Monitor {
     config: Config,
     previous_players: HashSet<String>,
     players_message_id: Option<i32>,
+    last_players_message: Option<String>,
 }
 
 impl Monitor {
@@ -15,6 +16,7 @@ impl Monitor {
             config,
             previous_players: HashSet::new(),
             players_message_id: None,
+            last_players_message: None,
         }
     }
 
@@ -95,6 +97,10 @@ impl Monitor {
             )
         };
 
+        if self.last_players_message.as_ref() == Some(&message) {
+            return Ok(());
+        }
+
         match self.players_message_id {
             Some(message_id) => {
                 telegram::edit_message(
@@ -115,6 +121,7 @@ impl Monitor {
             }
         }
 
+        self.last_players_message = Some(message);
         Ok(())
     }
 }
