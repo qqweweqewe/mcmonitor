@@ -1,10 +1,11 @@
 use crate::error::TelegramError;
 
-pub async fn send_message(
+pub async fn send_message_to_topic(
     bot_token: &str,
     chat_id: &str,
+    topic_id: i32,
     message: &str,
-) -> Result<(), TelegramError> {
+) -> Result<i32, TelegramError> {
     let url = format!("https://api.telegram.org/bot{}/sendMessage", bot_token);
     
     let client = reqwest::Client::new();
@@ -12,7 +13,44 @@ pub async fn send_message(
         .post(&url)
         .json(&serde_json::json!({
             "chat_id": chat_id,
+            "message_thread_id": topic_id,
             "text": message,
+            "parse_mode": "MarkdownV2"
+        }))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        eprintln!("Telegram API error response: {}", error_text);
+        return Err(TelegramError::ApiError(format!("{} - {}", status, error_text)));
+    }
+
+    let result: serde_json::Value = response.json().await?;
+    let message_id = result
+        .get("result")
+        .and_then(|r| r.get("message_id"))
+        .and_then(|id| id.as_i64())
+        .unwrap_or(0) as i32;
+    Ok(message_id)
+}
+
+pub async fn edit_message(
+    bot_token: &str,
+    chat_id: &str,
+    message_id: i32,
+    new_text: &str,
+) -> Result<(), TelegramError> {
+    let url = format!("https://api.telegram.org/bot{}/editMessageText", bot_token);
+    
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .json(&serde_json::json!({
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": new_text,
             "parse_mode": "MarkdownV2"
         }))
         .send()
@@ -22,65 +60,5 @@ pub async fn send_message(
         return Err(TelegramError::ApiError(response.status().to_string()));
     }
 
-    Ok(())
-}
-
-pub async fn handle_all_command(
-    bot_token: &str,
-    chat_id: &str,
-    server_address: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    match crate::fetch::get_server_status(server_address).await {
-        Ok(status) => {
-            let message = match status.players {
-                Some(players) if !players.is_empty() => {
-                    format!("Players online ({}):\n> {}", players.len(), players.join("\n> "))
-                },
-                Some(_) => "> No players online".to_string(),
-                None => "> Pretty empty here".to_string(),
-            };
-            
-            send_message(bot_token, chat_id, &message).await?;
-        },
-        Err(_) => {
-            send_message(bot_token, chat_id, "> Server is offline or unreachable").await?;
-        }
-    }
-    
-    Ok(())
-}
-
-pub async fn check_commands(
-    bot_token: &str,
-    chat_id: &str,
-    server_address: &str,
-    last_update_id: &mut i64,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let url = format!(
-        "https://api.telegram.org/bot{}/getUpdates?offset={}", 
-        bot_token, 
-        *last_update_id + 1
-    );
-    
-    let client = reqwest::Client::new();
-    let response = client.get(&url).send().await?;
-    let updates: serde_json::Value = response.json().await?;
-    
-    if let Some(result) = updates.get("result").and_then(|r| r.as_array()) {
-        for update in result {
-            if let Some(update_id) = update.get("update_id").and_then(|id| id.as_i64()) {
-                *last_update_id = update_id;
-                
-                if let Some(message) = update.get("message") {
-                    if let Some(text) = message.get("text").and_then(|t| t.as_str()) {
-                        if text == "/all" {
-                            handle_all_command(bot_token, chat_id, server_address).await?;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
     Ok(())
 }

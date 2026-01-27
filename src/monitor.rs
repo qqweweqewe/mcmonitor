@@ -6,7 +6,7 @@ use crate::{config::Config, fetch, telegram, messages};
 pub struct Monitor {
     config: Config,
     previous_players: HashSet<String>,
-    last_update_id: i64,
+    players_message_id: Option<i32>,
 }
 
 impl Monitor {
@@ -14,7 +14,7 @@ impl Monitor {
         Self {
             config,
             previous_players: HashSet::new(),
-            last_update_id: 0,
+            players_message_id: None,
         }
     }
 
@@ -31,14 +31,6 @@ impl Monitor {
     }
 
     async fn check_server(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Check for bot commands
-        telegram::check_commands(
-            &self.config.telegram_bot_token,
-            &self.config.telegram_chat_id,
-            &self.config.server_address,
-            &mut self.last_update_id,
-        ).await?;
-        
         let status = fetch::get_server_status(&self.config.server_address).await?;
 
         let current_players: HashSet<String> = status.players
@@ -56,27 +48,68 @@ impl Monitor {
             .cloned()
             .collect();
 
+        // Send join/leave messages to log topic
         for player in &new_players {
             let message = messages::get_random_join_message(player);
-            telegram::send_message(
+            let _ = telegram::send_message_to_topic(
                 &self.config.telegram_bot_token,
                 &self.config.telegram_chat_id,
+                self.config.log_topic_id,
                 &message,
             )
-            .await?;
+            .await;
         }
         
         for player in &left_players {
             let message = messages::get_random_leave_message(player);
-            telegram::send_message(
+            let _ = telegram::send_message_to_topic(
                 &self.config.telegram_bot_token,
                 &self.config.telegram_chat_id,
+                self.config.log_topic_id,
                 &message,
             )
-            .await?;
+            .await;
+        }
+
+        if let Err(e) = self.update_players_message(&current_players).await {
+            eprintln!("Failed to update players message: {}", e);
         }
 
         self.previous_players = current_players;
+        Ok(())
+    }
+
+    async fn update_players_message(&mut self, players: &HashSet<String>) -> Result<(), Box<dyn std::error::Error>> {
+        let message = if players.is_empty() {
+            r"*Server is empty*".to_string()
+        } else {
+            let player_list: Vec<String> = players.iter().cloned().collect();
+            format!(r"*Players online \({}\):*{}{}", 
+                players.len(),
+                "\n",
+                player_list.join("\n"))
+        };
+
+        match self.players_message_id {
+            Some(message_id) => {
+                telegram::edit_message(
+                    &self.config.telegram_bot_token,
+                    &self.config.telegram_chat_id,
+                    message_id,
+                    &message,
+                ).await?;
+            },
+            None => {
+                let message_id = telegram::send_message_to_topic(
+                    &self.config.telegram_bot_token,
+                    &self.config.telegram_chat_id,
+                    self.config.players_topic_id,
+                    &message,
+                ).await?;
+                self.players_message_id = Some(message_id);
+            }
+        }
+
         Ok(())
     }
 }
