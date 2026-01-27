@@ -1,2 +1,4 @@
 /target
 .env
+special_join_messages.json
+special_leave_messages.json

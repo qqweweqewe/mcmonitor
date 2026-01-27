@@ -1,32 +1,37 @@
 use rand::Rng;
+use std::collections::HashMap;
+use std::fs;
 
 const JOIN_MESSAGES: &[&str] = &[
-    r"▶ *{player}* has entered the game\!",
-    r"▶ *{player}* just landed on the server\!",
-    r"▶ *{player}* spawned into the world\!",
-    r"▶ *{player}* joined the adventure\!",
-    r"▶ *{player}* has connected to the server\!",
-    r"▶ *{player}* is now online\!",
-    r"▶ Welcome *{player}* to the server\!",
-    r"▶ *{player}* has joined the party\!",
-    r"▶ *{player}* entered the realm\!",
-    r"▶ *{player}* stepped into the world\!",
-    r"▶ *{player}* opened the door and walked in\!",
-    r"▶ *{player}* appeared in a flash of light\!",
-    r"▶ *{player}* made their grand entrance\!",
-    r"▶ *{player}* rocked into the server\!",
-    r"▶ *{player}* sprinted onto the server\!",
+    r"⟐ *{player}* бля опять ты",
+    r"⟐ *{player}* на месте🫡",
+    r"⟐ привет *{player}*\!",
+    r"⟐ *{player}* залетает на серв",
+    r"⟐ лютый *{player}*",
+    r"⟐ *{player}* снова тут\!",
+    r"⟐ *{player}* просто взял вошел",
+    r"⟐ кто составит компанию *{player}*?",
+    r"⟐ *{player}* материализовался",
+    r"⟐ *{player}* присоединяется",
+    r"⟐ *{player}* пожаловал",
 ];
 
 const LEAVE_MESSAGES: &[&str] = &[
-    r"◀ *{player}* has left the game\!",
-    r"◀ *{player}* vanished into thin air\!",
-    r"◀ *{player}* sailed away\!",
-    r"◀ *{player}* took their final bow\!",
-    r"◀ *{player}* rode off into the sunset\!",
-    r"◀ *{player}* logged off\!",
-    r"◀ Bye, *{player}*\!",
+    r"⁛ *{player}* ушел в закат",
+    r"⁛ *{player}* мама позвала кушать",
+    r"⁛ *{player}* наконец съебал",
+    r"⁛ *{player}* до связи\!",
+    r"⁛ *{player}* ну куда собрался нууу вернись",
+    r"⁛ Adios, *{player}*\!",
 ];
+
+// IMPORTANT PART
+fn load_special_messages(file_path: &str) -> HashMap<String, Vec<String>> {
+    fs::read_to_string(file_path)
+        .ok()
+        .and_then(|content| serde_json::from_str(&content).ok())
+        .unwrap_or_default()
+}
 
 fn escape_markdown(text: &str) -> String {
     text.chars()
@@ -39,12 +44,22 @@ fn escape_markdown(text: &str) -> String {
 
 pub fn get_random_join_message(player_name: &str) -> String {
     let mut rng = rand::thread_rng();
-    let template = JOIN_MESSAGES[rng.gen_range(0..JOIN_MESSAGES.len())];
+    let special_messages = load_special_messages("special_join_messages.json");
+    let template = if let Some(messages) = special_messages.get(player_name) {
+        &messages[rng.gen_range(0..messages.len())]
+    } else {
+        JOIN_MESSAGES[rng.gen_range(0..JOIN_MESSAGES.len())]
+    };
     template.replace("{player}", &escape_markdown(player_name))
 }
 
 pub fn get_random_leave_message(player_name: &str) -> String {
     let mut rng = rand::thread_rng();
-    let template = LEAVE_MESSAGES[rng.gen_range(0..LEAVE_MESSAGES.len())];
+    let special_messages = load_special_messages("special_leave_messages.json");
+    let template = if let Some(messages) = special_messages.get(player_name) {
+        &messages[rng.gen_range(0..messages.len())]
+    } else {
+        LEAVE_MESSAGES[rng.gen_range(0..LEAVE_MESSAGES.len())]
+    };
     template.replace("{player}", &escape_markdown(player_name))
 }
