@@ -81,13 +81,18 @@ impl Monitor {
 
     async fn update_players_message(&mut self, players: &HashSet<String>) -> Result<(), Box<dyn std::error::Error>> {
         let message = if players.is_empty() {
-            r"*Server is empty*".to_string()
+            format!(
+                "```\n┌─────────────────────┐\n│   SERVER IS EMPTY   │\n└─────────────────────┘\n```"
+            )
         } else {
-            let player_list: Vec<String> = players.iter().cloned().collect();
-            format!(r"*Players online \({}\):*{}{}", 
+            let player_list: Vec<String> = players.iter()
+                .map(|p| format!("│ ◦ {}\n", p))
+                .collect();
+            format!(
+                "```\n┌─────────────────────┐\n│ PLAYERS ONLINE ({:>2}) │\n├─────────────────────┤\n{}└─────────────────────┘\n```",
                 players.len(),
-                "\n",
-                player_list.join("\n"))
+                player_list.join("")
+            )
         };
 
         match self.players_message_id {
