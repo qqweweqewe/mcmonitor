@@ -1,5 +1,5 @@
-use std::collections::HashSet;
-use std::time::Duration;
+use std::collections::{HashSet, HashMap};
+use std::time::{Duration, Instant};
 use tokio::time;
 use serde::{Deserialize, Serialize};
 use crate::{config::Config, fetch, telegram, messages};
@@ -9,6 +9,7 @@ struct MonitorState {
     previous_players: HashSet<String>,
     players_message_id: Option<i32>,
     last_players_message: Option<String>,
+    player_join_times: HashMap<String, u64>,
 }
 
 pub struct Monitor {
@@ -16,16 +17,22 @@ pub struct Monitor {
     previous_players: HashSet<String>,
     players_message_id: Option<i32>,
     last_players_message: Option<String>,
+    player_join_times: HashMap<String, Instant>,
 }
 
 impl Monitor {
     pub fn new(config: Config) -> Self {
         let state = Self::load_state().unwrap_or_default();
+        let now = Instant::now();
+        let player_join_times = state.player_join_times.into_iter()
+            .map(|(player, secs)| (player, now - Duration::from_secs(secs)))
+            .collect();
         Self {
             config,
             previous_players: state.previous_players,
             players_message_id: state.players_message_id,
             last_players_message: state.last_players_message,
+            player_join_times,
         }
     }
 
@@ -61,6 +68,7 @@ impl Monitor {
 
         // Send join/leave messages to log topic
         for player in &new_players {
+            self.player_join_times.insert(player.clone(), Instant::now());
             let message = messages::get_random_join_message(player);
             let _ = telegram::send_message_to_topic(
                 &self.config.telegram_bot_token,
@@ -72,6 +80,7 @@ impl Monitor {
         }
         
         for player in &left_players {
+            self.player_join_times.remove(player);
             let message = messages::get_random_leave_message(player);
             let _ = telegram::send_message_to_topic(
                 &self.config.telegram_bot_token,
@@ -94,14 +103,25 @@ impl Monitor {
     async fn update_players_message(&mut self, players: &HashSet<String>) -> Result<(), Box<dyn std::error::Error>> {
         let message = if players.is_empty() {
             format!(
-                "```\n┌─────────────────────┐\n│   SERVER IS EMPTY   │\n└─────────────────────┘\n```"
+                "```\n╭─────────────────────────────────╮\n│         [ SERVER EMPTY ]        │\n╰─────────────────────────────────╯\n```"
             )
         } else {
-            let player_list: Vec<String> = players.iter()
-                .map(|p| format!("│ ◦ {}\n", p))
+            let mut sorted_players: Vec<_> = players.iter().collect();
+            sorted_players.sort();
+            let player_list: Vec<String> = sorted_players.iter()
+                .map(|p| {
+                    let playtime = self.player_join_times.get(*p)
+                        .map(|join_time| join_time.elapsed())
+                        .unwrap_or(Duration::ZERO);
+                    let total_secs = playtime.as_secs();
+                    let hours = total_secs / 3600;
+                    let mins = (total_secs % 3600) / 60;
+                    let secs = total_secs % 60;
+                    format!("│ • {:<15} {:02}:{:02}:{:02}      │\n", p, hours, mins, secs)
+                })
                 .collect();
             format!(
-                "```\n┌─────────────────────┐\n│ PLAYERS ONLINE ({:>2}) │\n├─────────────────────┤\n{}└─────────────────────┘\n```",
+                "```\n╭─────────────────────────────────╮\n│        PLAYERS ONLINE {:>2}        │\n├─────────────────────────────────┤\n{}╰─────────────────────────────────╯\n```",
                 players.len(),
                 player_list.join("")
             )
@@ -141,10 +161,15 @@ impl Monitor {
     }
 
     fn save_state(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let now = Instant::now();
+        let player_join_times = self.player_join_times.iter()
+            .map(|(player, join_time)| (player.clone(), now.duration_since(*join_time).as_secs()))
+            .collect();
         let state = MonitorState {
             previous_players: self.previous_players.clone(),
             players_message_id: self.players_message_id,
             last_players_message: self.last_players_message.clone(),
+            player_join_times,
         };
         let data = serde_json::to_string_pretty(&state)?;
         std::fs::write("monitor_state.json", data)?;
