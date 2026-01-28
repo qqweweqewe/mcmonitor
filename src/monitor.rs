@@ -1,7 +1,15 @@
 use std::collections::HashSet;
 use std::time::Duration;
 use tokio::time;
+use serde::{Deserialize, Serialize};
 use crate::{config::Config, fetch, telegram, messages};
+
+#[derive(Serialize, Deserialize, Default)]
+struct MonitorState {
+    previous_players: HashSet<String>,
+    players_message_id: Option<i32>,
+    last_players_message: Option<String>,
+}
 
 pub struct Monitor {
     config: Config,
@@ -12,11 +20,12 @@ pub struct Monitor {
 
 impl Monitor {
     pub fn new(config: Config) -> Self {
+        let state = Self::load_state().unwrap_or_default();
         Self {
             config,
-            previous_players: HashSet::new(),
-            players_message_id: None,
-            last_players_message: None,
+            previous_players: state.previous_players,
+            players_message_id: state.players_message_id,
+            last_players_message: state.last_players_message,
         }
     }
 
@@ -78,6 +87,7 @@ impl Monitor {
         }
 
         self.previous_players = current_players;
+        let _ = self.save_state();
         Ok(())
     }
 
@@ -122,6 +132,22 @@ impl Monitor {
         }
 
         self.last_players_message = Some(message);
+        Ok(())
+    }
+
+    fn load_state() -> Result<MonitorState, Box<dyn std::error::Error>> {
+        let data = std::fs::read_to_string("monitor_state.json")?;
+        Ok(serde_json::from_str(&data)?)
+    }
+
+    fn save_state(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let state = MonitorState {
+            previous_players: self.previous_players.clone(),
+            players_message_id: self.players_message_id,
+            last_players_message: self.last_players_message.clone(),
+        };
+        let data = serde_json::to_string_pretty(&state)?;
+        std::fs::write("monitor_state.json", data)?;
         Ok(())
     }
 }
